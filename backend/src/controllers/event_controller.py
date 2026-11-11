@@ -53,3 +53,24 @@ def aggregate(db: Session, *, top: int = 12) -> dict:
 
 def levels(db: Session, *, template_id: int | None = None) -> dict:
     return {"items": event_service.level_distribution(db, template_id=template_id)}
+
+
+def slots(
+    db: Session,
+    *,
+    template_id: int,
+    buckets: int = 24,
+    slot_index: int | None = None,
+    top_values: int = 8,
+) -> dict:
+    return event_service.slot_series(
+        db,
+        template_id=template_id,
+        buckets=buckets,
+        slot_index=slot_index,
+        top_values=top_values,
+    )
+
+
+def slot_invariants(db: Session, *, template_id: int | None = None) -> dict:
+    return event_service.slot_invariant_report(db, template_id=template_id)

@@ -5,10 +5,12 @@ from src.models.base import Base, now_local, TimestampMixin
 from src.models.alert_event import AlertEvent
 from src.models.alert_rule import AlertRule
 from src.models.audit_log import AuditLog
+from src.models.import_batch import ImportBatch
 from src.models.log_event import LogEvent
 from src.models.log_source import LogSource
 from src.models.log_template import LogTemplate
 from src.models.parse_rule import ParseRule
+from src.models.slot_metric import SlotMetric
 from src.models.user import User
 
 __all__ = [
@@ -18,9 +20,11 @@ __all__ = [
     "AlertEvent",
     "AlertRule",
     "AuditLog",
+    "ImportBatch",
     "LogEvent",
     "LogSource",
     "LogTemplate",
     "ParseRule",
+    "SlotMetric",
     "User",
 ]

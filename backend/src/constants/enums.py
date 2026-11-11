@@ -46,6 +46,10 @@ class SlotType(StrEnum):
     UNKNOWN = "unknown"
 
 
+# 槽位缺值 / 未识别时在指标里的统一分组值
+UNIDENTIFIED_SLOT_VALUE = "__unidentified__"
+
+
 class EventLevel(StrEnum):
     DEBUG = "debug"
     INFO = "info"

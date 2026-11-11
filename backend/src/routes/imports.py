@@ -44,3 +44,17 @@ def apply(
     user: User = Depends(require_permission("events:import")),
 ) -> dict:
     return import_controller.mine(db, payload.text, True, user, request)
+
+
+@router.get("/batches", dependencies=[guard("read")])
+def batches(db: Session = Depends(get_db)) -> dict:
+    return import_controller.list_batches(db)
+
+
+@router.post("/recompute", dependencies=[guard("write")])
+def recompute(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("events:import")),
+) -> dict:
+    return import_controller.recompute(db, user, request)

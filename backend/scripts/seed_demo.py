@@ -293,6 +293,11 @@ def _insert_events(db, sources: dict[str, LogSource], templates: dict[str, LogTe
             template.first_seen_at = stats_row[1]
             template.last_seen_at = stats_row[2]
     db.flush()
+    # 结构化槽位指标：seed 重复执行时先删后建，保持幂等
+    from src.services import slot_pipeline
+
+    metric_result = slot_pipeline.recompute_all_metrics(db)
+    _log("SEED_CREATED", "slot_metric", f"rows={metric_result['metric_rows']}")
 
 
 def _upsert_alert_rules(db, templates: dict[str, LogTemplate]) -> dict[str, AlertRule]:

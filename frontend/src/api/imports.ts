@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { MinePreview } from '../types/models';
+import type { ImportBatch, MinePreview, RecomputeResult } from '../types/models';
 
 export const importApi = {
   sample: async (): Promise<string> => {
@@ -10,4 +10,6 @@ export const importApi = {
   sampleMeta: () => api.get<Record<string, unknown>>('/imports/sample/meta'),
   mine: (text: string) => api.post<MinePreview>('/imports/mine', { text, apply: false }),
   apply: (text: string) => api.post<MinePreview>('/imports/apply', { text }),
+  batches: () => api.get<{ items: ImportBatch[]; total: number }>('/imports/batches'),
+  recompute: () => api.post<RecomputeResult>('/imports/recompute', {}),
 };

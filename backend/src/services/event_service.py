@@ -211,3 +211,31 @@ def level_distribution(db: Session, *, template_id: int | None = None) -> list[d
     return [
         {"level": row[0], "count": int(row[1]), "ratio": round(int(row[1]) / total, 4)} for row in rows
     ]
+
+
+def slot_series(
+    db: Session,
+    *,
+    template_id: int,
+    buckets: int = 24,
+    slot_index: int | None = None,
+    top_values: int = 8,
+) -> dict:
+    """槽位分组走势：按 (模板, 时间桶, 槽位, 槽值) 的指标还原每个槽位的分组计数曲线。"""
+    from src.services import slot_pipeline
+
+    return slot_pipeline.slot_metric_series(
+        db,
+        template_id=template_id,
+        buckets=buckets,
+        slot_index=slot_index,
+        top_values=top_values,
+    )
+
+
+def slot_invariant_report(db: Session, *, template_id: int | None = None) -> dict:
+    """不变量校验报告：模板桶各槽位分组数量之和对不上事件数时列出违例。"""
+    from src.services import slot_pipeline
+
+    violations = slot_pipeline.verify_invariants(db, template_id=template_id)
+    return {"ok": not violations, "violations": violations, "violation_count": len(violations)}

@@ -50,7 +50,9 @@ docker compose exec -T backend python -m scripts.seed_demo
 ```
 
 演示流程（与 TESTING.md 第 5 节一致）：admin 登录 → `/import`「载入内置样本」→「运行 Drain 挖掘」
-（5 个新模板 / 覆盖率 96.39%）→「应用模板到事件」→ `/events` 看按模板聚合趋势 →
+（5 个新模板 / 覆盖率 96.39%）→「应用模板到事件」（回填 240 条 pending + 重算槽位指标，
+同一样本再点一次可验证零新增、零重复计数）→ `/events` 看按模板聚合趋势与状态码/耗时等槽位分组走势、
+用「校验分组对齐」核验不变量 →
 `/alerts`「运行异常扫描」（error 模板尖峰 z=6.745 触发告警）→ 用 engineer 登录确认并静默 30min →
 viewer 登录验证只读（建规则 403）。
 
@@ -77,6 +79,24 @@ viewer 登录验证只读（建规则 403）。
 可复现条件：`SEED_ANCHOR=2026-11-10T15:05:00` 固定时间轴 + 确定性样本生成器
 （`backend/scripts/fixtures.py`，无 random），因此 z 值与覆盖率每次重跑一致。
 
+### C. 结构化槽位指标管道 · `backend/src/services/slot_pipeline.py`
+
+导入在「应用」之后串起一条可连续运行的结构化管道：
+
+1. **命名槽值**：每条已归类事件按模板通配位提取命名槽值（`drain_engine.extract_slot_values`，
+   名称取模板 `slot_names` → `key=value` 的 key → `slot_{index}` 兜底），写回
+   `log_event.fields.slots`；
+2. **指标预聚合**：按 (模板 × 5 分钟桶 × 槽位 × 槽值) 写 `slot_metric`，支撑状态码、耗时等
+   槽位的分组走势查询（`GET /events/slots`）；
+3. **幂等**：导入批次按全文 sha256 指纹落 `import_batch`，同一批重复导入只更新 `last_run_at`；
+   事件靠 `line_hash` 去重新增为零，指标桶「先删后建」不重复计数；
+4. **迟到归桶**：待归类（pending）事件被新模板回填时，按事件自身 `event_time` 对齐的原时间桶
+   重算，历史走势随之修正，而不是写进当前桶；
+5. **未识别**：缺值 / 空值 / 无法归类的 token 统一计入 `__unidentified__` 分组；
+6. **对齐不变量**：任一 (模板, 桶) 内各槽位分组数量之和 == 桶事件数 × 槽位数，
+   `GET /events/slots/invariants` 与页面「校验分组对齐」按钮可随时核验；
+   `POST /imports/recompute` 提供全量重建（先清空再扫描全部已归类事件）。
+
 ## 4. 页面（6 个）
 
 | 路由 | 内容 | 共享组件 |
@@ -84,9 +104,9 @@ viewer 登录验证只读（建规则 403）。
 | `/login` | 登录（手输邮箱，不做账号快捷切换） | — |
 | `/sources` | 日志源与解析规则（左列表右详情） | `SourceCard` |
 | `/templates` | 模板库：模板串 + 槽位高亮 + 频次 | `TemplateTokenStrip` |
-| `/events` | 事件检索 + 按模板聚合趋势（Canvas2D 折线 + error 柱） | `TrendChart` |
+| `/events` | 事件检索（含命名槽值标签）+ 按模板聚合趋势（Canvas2D 折线 + error 柱）+ 槽位分组走势与对齐校验 | `TrendChart` / `SlotTrendPanel` |
 | `/alerts` | 告警规则与触发记录（mini 趋势 + 判定快照） | `TrendChart`（mini） |
-| `/import` | 导入/采样 → Drain 挖掘预览 → 应用模板 | `TemplateTokenStrip` / `SourceCard` |
+| `/import` | 导入/采样 → Drain 挖掘预览 → 应用模板 → 槽位指标重算 / 批次历史 | `TemplateTokenStrip` / `SourceCard` |
 
 ## 5. 技术栈
 
@@ -113,11 +133,11 @@ gb-555/
 │  └─ src/
 │     ├─ config/                # settings / database / app / celery / bootstrap
 │     ├─ constants/             # enums / roles / error_codes / limits / messages / log_templates
-│     ├─ models/                # log_source / parse_rule / log_template / log_event / alert_rule / alert_event / user / audit_log
+│     ├─ models/                # log_source / parse_rule / log_template / log_event / slot_metric / import_batch / alert_rule / alert_event / user / audit_log
 │     ├─ schemas/               # 请求响应模型
-│     ├─ services/              # drain_engine / anomaly_engine / source / template / event / alert / import / audit / quota / auth
+│     ├─ services/              # drain_engine / slot_pipeline / anomaly_engine / source / template / event / alert / import / audit / quota / auth
 │     ├─ controllers/           # 编排 service + 写审计
-│     ├─ routes/                # health / auth / sources / templates / events / alerts / imports / audit / meta
+│     ├─ routes/                # health / auth / sources / templates / events(含 slots) / alerts / imports(含 batches/recompute) / audit / meta
 │     ├─ middlewares/           # auth / rbac / rate_limit / audit_logger / error_handler
 │     └─ utils/                 # jwt / password / errors / logger / redis / time_buckets / text
 ├─ worker/                      # Celery worker（复用 backend 服务层）+ healthcheck.sh

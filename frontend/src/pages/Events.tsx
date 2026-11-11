@@ -1,11 +1,14 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../components/common/EmptyState';
 import { GaugeMeter } from '../components/common/GaugeMeter';
 import { LevelBadge } from '../components/common/LevelBadge';
+import { SlotTrendPanel } from '../components/common/SlotTrendPanel';
 import { TrendChart } from '../components/common/TrendChart';
 import { EVENT_LEVELS, LEVEL_LABELS } from '../constants/enums';
 import { useTrendSeries } from '../hooks/useTrendSeries';
+import { eventApi } from '../api/event';
 import { useEventStore } from '../stores/eventStore';
+import type { SlotInvariantReport } from '../types/models';
 import { formatCount, formatPercent } from '../utils/formatCount';
 import { formatTime } from '../utils/formatTime';
 
@@ -13,6 +16,17 @@ export const EventsPage = () => {
   const { page, trend, aggregate, filters, loading, error, loadPage, loadTrend, loadAggregate, setFilters } =
     useEventStore();
   const view = useTrendSeries(trend, 5);
+  const [invariant, setInvariant] = useState<SlotInvariantReport | null>(null);
+  const [invariantBusy, setInvariantBusy] = useState(false);
+
+  const checkInvariants = async () => {
+    setInvariantBusy(true);
+    try {
+      setInvariant(await eventApi.slotInvariants(filters.templateId ?? undefined));
+    } finally {
+      setInvariantBusy(false);
+    }
+  };
 
   useEffect(() => {
     void loadPage(1);
@@ -65,6 +79,58 @@ export const EventsPage = () => {
             ) : (
               <EmptyState title="窗口内还没有归类事件" hint="先到「导入挖掘」跑一次 Drain，把待归类行变成模板事件。" />
             )}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>结构化槽位指标</h2>
+            <span className="meta">
+              {filters.templateId ? (
+                <>
+                  模板 #{filters.templateId}
+                  <button
+                    className="btn small ghost"
+                    type="button"
+                    style={{ marginLeft: 10 }}
+                    onClick={() => setFilters({ templateId: null })}
+                  >
+                    清除筛选
+                  </button>
+                </>
+              ) : (
+                '点下方排行选模板'
+              )}
+              <button
+                className="btn small ghost"
+                type="button"
+                style={{ marginLeft: 10 }}
+                disabled={invariantBusy}
+                onClick={() => void checkInvariants()}
+              >
+                {invariantBusy ? '校验中…' : '校验分组对齐'}
+              </button>
+            </span>
+          </div>
+          <div className="panel-body">
+            {invariant ? (
+              invariant.ok ? (
+                <div className="banner ok">
+                  对齐校验通过：所有模板桶内各槽位分组数量之和与模板事件数 × 槽位数完全一致（0 条违例）。
+                </div>
+              ) : (
+                <div className="banner">
+                  发现 {invariant.violation_count} 条对不齐的模板桶，首条：模板 #{invariant.violations[0].template_id} ·{' '}
+                  {invariant.violations[0].bucket_start} · 事件 {invariant.violations[0].event_count} / 指标合计{' '}
+                  {invariant.violations[0].metric_sum}
+                </div>
+              )
+            ) : (
+              <p className="hint" style={{ margin: 0 }}>
+                指标按 (模板 × 5 分钟桶 × 命名槽位 × 槽值) 预聚合，导入管道每次先删后建、幂等重算；缺值统一计入「未识别」分组。
+              </p>
+            )}
+            <SlotTrendPanel templateId={filters.templateId} buckets={filters.buckets} />
           </div>
         </section>
 
@@ -166,6 +232,19 @@ export const EventsPage = () => {
                             <div className="mono truncate" title={event.raw_line}>
                               {event.raw_line}
                             </div>
+                            {event.fields?.slots && Object.keys(event.fields.slots).length > 0 ? (
+                              <div className="slot-chips">
+                                {Object.entries(event.fields.slots).map(([name, value]) => (
+                                  <span
+                                    key={name}
+                                    className={`slot-chip${value === '__unidentified__' ? ' unid' : ''}`}
+                                    title={`${name}=${value}`}
+                                  >
+                                    <b>{name}</b>={value === '__unidentified__' ? '未识别' : value}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                           </td>
                         </tr>
                       ))}

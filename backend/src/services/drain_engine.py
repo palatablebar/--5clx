@@ -116,6 +116,7 @@ class _Cluster:
     slot_observations: dict[int, list[str]] = field(default_factory=dict)
     level_counts: dict[str, int] = field(default_factory=dict)
     known_template_id: int | None = None
+    known_signature: str = ""
     service: str = ""
 
     def observe(self, tokens: list[str], line: str, position: int, level: str) -> None:
@@ -227,6 +228,8 @@ class MineResult:
     elapsed_ms: int
     known_templates_used: int = 0
     line_signatures: list[str | None] = field(default_factory=list)
+    # 已知模板簇 id → 库内模板签名（load_known 时由调用方提供，缺失则回退簇签名）
+    known_signatures: dict[int, str] = field(default_factory=dict)
 
     @property
     def coverage(self) -> float:
@@ -286,6 +289,7 @@ class DrainEngine:
                 sample_count=max(1, int(item.get("frequency") or 1)),
                 sample_line=str(item.get("sample_line") or template_str),
                 known_template_id=item.get("template_id"),
+                known_signature=str(item.get("signature") or ""),
                 service=str(item.get("service") or ""),
             )
             cluster.level_counts[str(item.get("level_hint") or EventLevel.INFO.value)] = 1
@@ -416,8 +420,20 @@ class DrainEngine:
             )
 
         final_signature: dict[int, str] = {}
+        known_signatures: dict[int, str] = {}
         for cluster in clusters:
             final_signature[id(cluster)] = template_signature(cluster.template_str())
+        # 已知簇不在 clusters 里，遍历前缀树把 (簇 id → 库内签名) 补齐，
+        # 否则命中已知模板的行会拿不到 DB 签名，重复导入时被误当新行。
+        for layer_root in self._layers.values():
+            stack: list[_PrefixNode] = [layer_root]
+            while stack:
+                node = stack.pop()
+                for cluster in node.clusters:
+                    if cluster.known_template_id is not None and cluster.known_signature:
+                        final_signature[id(cluster)] = cluster.known_signature
+                        known_signatures[id(cluster)] = cluster.known_signature
+                stack.extend(node.children.values())
         line_signatures: list[str | None] = [
             final_signature.get(id(ref)) if ref is not None else None for ref in position_cluster
         ]
@@ -434,6 +450,7 @@ class DrainEngine:
             elapsed_ms=elapsed_ms,
             known_templates_used=len(self._layers),
             line_signatures=line_signatures,
+            known_signatures=known_signatures,
         )
 
 
@@ -447,6 +464,51 @@ def assign_template(lines: list[str], known: list[dict], threshold: float = DEFA
         counts[template.signature] = template.sample_count
     return counts
 
+
+def extract_slot_values(
+    line: str, template_str: str, slot_names: list[str] | None = None
+) -> list[dict]:
+    """结构化管道的槽位提取：按模板 token 序列把一行日志对齐到每个通配槽位。
+
+    返回 [{index, name, value, type, is_unidentified}]，与模板通配位一一对应：
+    - 名称优先取模板 slot_names，其次取 `key=value` 的 key，兜底 `slot_{index}`；
+    - 值剥掉 key 前缀与引号；空值 / 无法归类类型记为未识别（is_unidentified=True）；
+    - 行 token 数与模板不一致（理论上不会发生，签名匹配即等长）时返回空列表，
+      由调用方把该事件计入未识别分组。
+    """
+    tokens = tokenize(line)
+    template_tokens = template_str.split(" ")
+    if len(tokens) != len(template_tokens):
+        return []
+    extracted: list[dict] = []
+    for index, (pattern, token) in enumerate(zip(template_tokens, tokens)):
+        if pattern != WILDCARD:
+            continue
+        key, raw_value = split_kv(token)
+        value = raw_value.strip('"\'')
+        name = ""
+        if slot_names and index < len(slot_names):
+            name = str(slot_names[index] or "")
+        if not name:
+            name = key or f"slot_{index}"
+        if value == "":
+            slot_type = SlotType.UNKNOWN.value
+            unidentified = True
+        else:
+            slot_type = classify_slot(token)
+            unidentified = slot_type == SlotType.UNKNOWN.value
+        extracted.append(
+            {
+                "index": index,
+                "name": name,
+                "value": value,
+                "type": slot_type,
+                "is_unidentified": unidentified,
+            }
+        )
+    return extracted
+
+
 __all__ = [
     "DrainEngine",
     "MineResult",
@@ -459,5 +521,6 @@ __all__ = [
     "is_noise_token_line",
     "split_kv",
     "assign_template",
+    "extract_slot_values",
     "DEFAULT_SIMILARITY_THRESHOLD",
 ]

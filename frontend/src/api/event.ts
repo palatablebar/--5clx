@@ -1,5 +1,5 @@
 import { api, queryString } from './client';
-import type { EventPage, TemplateAggregate, TrendPayload } from '../types/models';
+import type { EventPage, SlotInvariantReport, SlotSeriesPayload, TemplateAggregate, TrendPayload } from '../types/models';
 
 export const eventApi = {
   search: (params: {
@@ -15,4 +15,8 @@ export const eventApi = {
   aggregate: (top = 12) => api.get<{ items: TemplateAggregate[]; total: number }>(`/events/aggregate${queryString({ top })}`),
   levels: (templateId?: number) =>
     api.get<{ items: Array<{ level: string; count: number; ratio: number }> }>(`/events/levels${queryString({ template_id: templateId })}`),
+  slots: (templateId: number, params: { buckets?: number; slot_index?: number; top_values?: number } = {}) =>
+    api.get<SlotSeriesPayload>(`/events/slots${queryString({ template_id: templateId, ...params })}`),
+  slotInvariants: (templateId?: number) =>
+    api.get<SlotInvariantReport>(`/events/slots/invariants${queryString({ template_id: templateId })}`),
 };

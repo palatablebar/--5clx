@@ -75,6 +75,11 @@ export interface LogEvent {
   event_time: string;
   bucket_start: string | null;
   origin: string;
+  fields?: {
+    tokens?: number;
+    slots?: Record<string, string>;
+    [key: string]: unknown;
+  };
 }
 
 export interface EventPage {
@@ -111,6 +116,74 @@ export interface TemplateAggregate {
   event_count: number;
   error_count: number;
   error_ratio: number;
+}
+
+export interface SlotValueGroup {
+  slot_value: string;
+  total: number;
+  is_unidentified: boolean;
+  series: number[];
+}
+
+export interface SlotGroup {
+  slot_index: number;
+  slot_name: string;
+  slot_type: SlotType;
+  unidentified_count: number;
+  groups: SlotValueGroup[];
+  group_count: number;
+  shown_groups: number;
+  top_values: string[];
+}
+
+export interface SlotSeriesPayload {
+  template_id: number;
+  template_str: string;
+  bucket_minutes: number;
+  anchor: string;
+  buckets: string[];
+  slots: SlotGroup[];
+  unidentified_total: number;
+}
+
+export interface SlotInvariantReport {
+  ok: boolean;
+  violation_count: number;
+  violations: Array<{
+    template_id: number;
+    bucket_start: string;
+    event_count: number;
+    slot_count: number;
+    metric_sum: number;
+    expected_sum: number;
+    diff: number;
+  }>;
+}
+
+export interface ImportBatch {
+  id: number;
+  content_fingerprint: string;
+  rows_total: number;
+  inserted_events: number;
+  skipped_duplicates: number;
+  noise_lines: number;
+  created_templates: number;
+  recomputed_buckets: number;
+  metric_rows: number;
+  status: string;
+  actor: string;
+  last_run_at: string | null;
+  created_at: string | null;
+}
+
+export interface RecomputeResult {
+  recomputed_buckets: number;
+  metric_rows: number;
+  events_scanned: number;
+  full?: boolean;
+  violations: number;
+  actor: string;
+  message?: string;
 }
 
 export interface AlertRule {
@@ -185,6 +258,11 @@ export interface MinePreview {
   created_templates?: number;
   assigned_events?: number;
   inserted_events?: number;
+  skipped_duplicates?: number;
+  recomputed_buckets?: number;
+  metric_rows?: number;
+  duplicate_import?: boolean;
+  batch_id?: number;
 }
 
 export interface Overview {

@@ -8,9 +8,10 @@ import { StatusPill } from '../components/common/StatusPill';
 import { TemplateTokenStrip } from '../components/common/TemplateTokenStrip';
 import { sourceApi } from '../api/source';
 import { useAuthStore } from '../stores/authStore';
-import type { MinePreview, Overview, Source } from '../types/models';
+import type { ImportBatch, MinePreview, Overview, RecomputeResult, Source } from '../types/models';
 import { errorMessage } from '../utils/errorMessage';
 import { formatCount } from '../utils/formatCount';
+import { formatTime } from '../utils/formatTime';
 
 const SAMPLE_HINT = '内置样本 249 行 = 240 行新格式（3 种格式 / 5 个形态）+ 9 行噪声分隔符，与 seed 的 240 条待归类事件逐字一致。';
 
@@ -21,13 +22,20 @@ export const ImportPage = () => {
   const [applied, setApplied] = useState<MinePreview | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [recompute, setRecompute] = useState<RecomputeResult | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
 
   const refresh = async () => {
-    const [sourceList, summary] = await Promise.all([sourceApi.list(), metaApi.overview()]);
+    const [sourceList, summary, batchPage] = await Promise.all([
+      sourceApi.list(),
+      metaApi.overview(),
+      importApi.batches(),
+    ]);
     setSources(sourceList.items);
     setOverview(summary);
+    setBatches(batchPage.items);
   };
 
   useEffect(() => {
@@ -73,6 +81,20 @@ export const ImportPage = () => {
       await refresh();
     } catch (caught) {
       setError(errorMessage(caught, '应用失败'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runRecompute = async () => {
+    setError('');
+    setBusy('recompute');
+    try {
+      const result = await importApi.recompute();
+      setRecompute(result);
+      await refresh();
+    } catch (caught) {
+      setError(errorMessage(caught, '重算失败'));
     } finally {
       setBusy('');
     }
@@ -152,9 +174,18 @@ export const ImportPage = () => {
         </div>
 
         {applied ? (
-          <div className="banner ok">
-            应用完成：新建模板 {applied.created_templates ?? 0} 个 · 回填事件 {applied.assigned_events ?? 0} 条 · 幂等入库{' '}
-            {applied.inserted_events ?? 0} 条 · 覆盖率 {applied.coverage_percent.toFixed(2)}%
+          <div className={`banner ${applied.duplicate_import ? 'info' : 'ok'}`}>
+            {applied.duplicate_import ? '同一批重复导入（指纹命中）：' : '应用完成：'}
+            新建模板 {applied.created_templates ?? 0} 个 · 回填事件 {applied.assigned_events ?? 0} 条 · 新入库{' '}
+            {applied.inserted_events ?? 0} 条 · 重复跳过 {applied.skipped_duplicates ?? 0} 条 · 重算{' '}
+            {applied.recomputed_buckets ?? 0} 个模板桶 / {applied.metric_rows ?? 0} 行槽位指标 · 覆盖率{' '}
+            {applied.coverage_percent.toFixed(2)}%
+          </div>
+        ) : null}
+        {recompute ? (
+          <div className={`banner ${recompute.violations === 0 ? 'ok' : ''}`}>
+            全量重算完成：扫描 {formatCount(recompute.events_scanned)} 条已归类事件，重建{' '}
+            {formatCount(recompute.metric_rows)} 行槽位指标，对齐违例 {recompute.violations} 条。
           </div>
         ) : null}
 
@@ -204,6 +235,63 @@ export const ImportPage = () => {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>结构化管道与导入批次</h2>
+            <span className="meta">
+              <button
+                className="btn small ghost"
+                type="button"
+                disabled={busy !== '' || !can('events:import')}
+                onClick={() => void runRecompute()}
+              >
+                {busy === 'recompute' ? '重算中…' : '全量重新计算槽位指标'}
+              </button>
+            </span>
+          </div>
+          <div className="panel-body flush">
+            <p className="hint" style={{ padding: '12px 16px 0' }}>
+              每条事件按模板通配位提取命名槽值（状态码、耗时等），按 (模板 × 5 分钟桶 × 槽位 × 槽值) 预聚合；
+              同一批按全文指纹幂等，重复导入不新增事件、不重复计数；迟到记录归入新模板后回到原时间桶重算。
+            </p>
+            {batches.length === 0 ? (
+              <EmptyState title="还没有导入批次" hint="应用一次样本后，这里会出现批次记录与重算口径。" />
+            ) : (
+              <table className="ruled">
+                <thead>
+                  <tr>
+                    <th>批次指纹</th>
+                    <th className="num">行数</th>
+                    <th className="num">新入库</th>
+                    <th className="num">重复跳过</th>
+                    <th className="num">噪声</th>
+                    <th className="num">新模板</th>
+                    <th className="num">重算桶</th>
+                    <th className="num">指标行</th>
+                    <th>最近运行</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batches.map((batch) => (
+                    <tr key={batch.id}>
+                      <td className="mono">{batch.content_fingerprint}…</td>
+                      <td className="num">{formatCount(batch.rows_total)}</td>
+                      <td className="num">{formatCount(batch.inserted_events)}</td>
+                      <td className="num">{formatCount(batch.skipped_duplicates)}</td>
+                      <td className="num">{formatCount(batch.noise_lines)}</td>
+                      <td className="num">{formatCount(batch.created_templates)}</td>
+                      <td className="num">{formatCount(batch.recomputed_buckets)}</td>
+                      <td className="num">{formatCount(batch.metric_rows)}</td>
+                      <td className="mono" style={{ whiteSpace: 'nowrap' }}>
+                        {formatTime(batch.last_run_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </section>

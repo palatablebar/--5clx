@@ -51,3 +51,21 @@ def aggregate(top: int = 12, db: Session = Depends(get_db)) -> dict:
 @router.get("/levels", dependencies=[guard("read")])
 def levels(template_id: int | None = None, db: Session = Depends(get_db)) -> dict:
     return event_controller.levels(db, template_id=template_id)
+
+
+@router.get("/slots", dependencies=[guard("read")])
+def slots(
+    template_id: int,
+    buckets: int = 24,
+    slot_index: int | None = None,
+    top_values: int = 8,
+    db: Session = Depends(get_db),
+) -> dict:
+    return event_controller.slots(
+        db, template_id=template_id, buckets=buckets, slot_index=slot_index, top_values=top_values
+    )
+
+
+@router.get("/slots/invariants", dependencies=[guard("read")])
+def slot_invariants(template_id: int | None = None, db: Session = Depends(get_db)) -> dict:
+    return event_controller.slot_invariants(db, template_id=template_id)

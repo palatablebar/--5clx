@@ -11,10 +11,12 @@ from src.models import Base  # noqa: F401  (Base 聚合所有 model)
 import src.models.alert_event  # noqa: F401
 import src.models.alert_rule  # noqa: F401
 import src.models.audit_log  # noqa: F401
+import src.models.import_batch  # noqa: F401
 import src.models.log_event  # noqa: F401
 import src.models.log_source  # noqa: F401
 import src.models.log_template  # noqa: F401
 import src.models.parse_rule  # noqa: F401
+import src.models.slot_metric  # noqa: F401
 import src.models.user  # noqa: F401
 from src.utils.logger import get_logger
 

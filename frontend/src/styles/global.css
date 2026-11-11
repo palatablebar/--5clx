@@ -996,3 +996,132 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------------------------------------------------------------- 槽位分组指标 */
+.slot-card {
+  border: var(--hair) solid var(--rule);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slot-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: var(--hair) solid var(--rule);
+  background: var(--paper-deep);
+}
+
+.slot-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.slot-type-tag {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  background: var(--teal-wash);
+  padding: 2px 7px;
+}
+
+.slot-unid-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--brick);
+}
+
+.slot-table {
+  table-layout: fixed;
+}
+
+.slot-table td,
+.slot-table th {
+  padding: 7px 12px;
+}
+
+.slot-value-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-row-unid {
+  background: var(--brick-wash);
+}
+
+.slot-unid-pill {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--brick);
+  border: var(--hair) solid var(--brick);
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.slot-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 42px;
+  min-width: 160px;
+}
+
+.slot-bar {
+  flex: 1 1 0;
+  min-width: 3px;
+  border-radius: 1px 1px 0 0;
+  transition: height 160ms ease;
+}
+
+.slot-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.slot-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 1px 6px;
+  background: var(--teal-wash);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-chip b {
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.slot-chip.unid {
+  background: var(--brick-wash);
+  color: var(--brick);
+}
+
+.slot-chip.unid b {
+  color: var(--brick);
+}
+
+.slot-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
